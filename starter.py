@@ -22,13 +22,41 @@ def loadData():
     return trainData, validData, testData, trainTarget, validTarget, testTarget
 
 def MSE(W, b, x, y, reg):
-    # Your implementation here
-    # W: weight matrix
-    pass
+    '''
+    :param W: Weight matrix
+    :param b: bias matrix
+    :param x: data
+    :param y: labels
+    :param reg: regularization param
+    :return: mean square error loss
+    '''
+    N = len(x)
+    Ld = 0
+    for n in range(N):
+        Ld += np.square(np.dot(W, x[n]) + b - y[n])
+    L = Ld / (2 * N) + reg * np.dot(W, W) / 2
+    return L
 
 def gradMSE(W, b, x, y, reg):
-    # Your implementation here
-    pass
+    N = len(x)
+    d = len(W)
+    b_grad = 0
+    w_grad = np.zeros(d)
+    for n in range(N):
+        # Calculate {w' dot x(n) + b - y(n)}
+        error = np.dot(W, x[n]) + b - y[n]
+        # Calculate b_grad
+        b_grad += error
+        # Calculate each individual component of w_grad
+        for k in range(d):
+            w_grad[k] += x[n][k] * error + reg * W[k]
+
+    b_grad = b_grad / N
+    for i in range(d):
+        w_grad[k] = w_grad[k] / N
+
+    return w_grad, b_grad
+
 
 def crossEntropyLoss(W, b, x, y, reg):
     # Your implementation here
