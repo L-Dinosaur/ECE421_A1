@@ -38,6 +38,15 @@ def MSE(W, b, x, y, reg):
     return L
 
 def gradMSE(W, b, x, y, reg):
+    '''
+    :param W: Weight matrix
+    :param b: bias matrix
+    :param x: data matrix
+    :param y: labels
+    :param reg: regularization parameter
+    :return: gradient of MSE against {weights, bias}
+    '''
+
     N = len(x)
     d = len(W)
     b_grad = 0
@@ -67,8 +76,19 @@ def gradCE(W, b, x, y, reg):
     pass
 
 def grad_descent(W, b, trainingData, trainingLabels, alpha, iterations, reg, EPS):
-    # Your implementation here
-    pass
+    '''
+    :param W: Weight matrix
+    :param b: bias matrix
+    :param trainingData: <-
+    :param trainingLabels: <-
+    :param alpha: learning rate
+    :param iterations: number of passes through training data
+    :param reg: regularization constant
+    :param EPS: error tolerance
+    :return: learned weights and bias
+    '''
+    # Take W as initial value
+
 
 def buildGraph(beta1=None, beta2=None, epsilon=None, lossType=None, learning_rate=None):
     # Your implementation here
@@ -76,5 +96,5 @@ def buildGraph(beta1=None, beta2=None, epsilon=None, lossType=None, learning_rat
 
 
 if __name__ == '__main__':
-    df = loadData()
+    trainData, validData, testData, trainTarget, validTarget, testTarget = loadData()
     print("done")
