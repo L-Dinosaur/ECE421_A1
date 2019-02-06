@@ -1,0 +1,7 @@
+learning rate = 0.05
+Runtime: 44.00063633918762 seconds
+Epochs run: 5000 
+Accuracy: 0.979310
+Final Training Loss: 0.056147 
+Final Validation Loss: 0.060952 
+Final Testing Loss: 0.080961 

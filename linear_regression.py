@@ -56,26 +56,61 @@ def gradMSE(W, b, x, y, reg):
     g_w = 0
     g_b = (x.dot(W) - y.T).sum() / N + b
     g_w = x.T.dot((x.dot(W) - y.T + b).T).T/N + reg*W
-    '''
-    b_grad = 0
-    w_grad = np.zeros(d)
-    for n in range(N):
-        # Calculate {w' dot x(n) + b - y(n)}
-        error = np.dot(W, x[n]) + b - y[n]
-        # Calculate b_grad
-        b_grad += error
-        # Calculate each individual component of w_grad
-        for k in range(d):
-            w_grad[k] += x[n][k] * error
 
-    b_grad = b_grad / N
-    for i in range(d):
-        w_grad[i] = w_grad[i] / N + reg * W[i]
-'''
     return g_w[0], g_b
 
 
-def grad_descent(W, b, x, y, x_val, y_val, x_test, y_test, alpha, epochs, reg, error_tol=1e-7):
+def sigmoid(z):
+    return 1 / (1 + np.exp(-1 * z))
+
+def crossEntropyLoss(W, b, x, y, reg):
+    '''
+
+    :param W:
+    :param b:
+    :param x:
+    :param y:
+    :param reg:
+    :return:
+    '''
+    N = len(x)
+    b_vec = np.ones(N) * b
+    logit = sigmoid(x.dot(W) + b_vec)
+    L = (-1 * y.T[0].dot(np.log(logit)) - (1 - y.T[0]).dot(np.log(1 - logit))) / N + 0.5 * reg * np.dot(W, W)
+
+    return L
+
+def grad(W, b, x, y, reg, lossType):
+    if(lossType == "linear"):
+        return gradMSE(W, b, x, y, reg)
+    elif(lossType == "log"):
+        return gradCE(W, b, x, y, reg)
+
+
+def loss(W, b, x, y, reg, lossType):
+    if(lossType == "linear"):
+        return MSE(W, b, x, y, reg)
+    elif(lossType == "log"):
+        return crossEntropyLoss(W, b, x, y, reg)
+
+def gradCE(W, b, x, y, reg):
+    '''
+
+    :param W:
+    :param b:
+    :param x:
+    :param y:
+    :param reg:
+    :return:
+    '''
+    N = len(x)
+    b_vec = np.ones(N) * b
+    g_b = (sigmoid(x.dot(W) + b_vec) - y.T[0]).sum() / N
+    g_w = x.T.dot(sigmoid(x.dot(W) + b) - y.T[0]) / N + reg * W
+    return g_w, g_b
+
+
+def grad_descent(W, b, x, y, x_val, y_val, x_test, y_test, alpha, epochs, reg, error_tol=1e-7, lossType="None"):
 
     '''
 
@@ -92,7 +127,7 @@ def grad_descent(W, b, x, y, x_val, y_val, x_test, y_test, alpha, epochs, reg, e
     '''
 
 
-    w_grad, b_grad = gradMSE(W, b, x, y, reg)
+    w_grad, b_grad = grad(W, b, x, y, reg, lossType)
 
     new_W = W - alpha * w_grad
     new_b = b - alpha * b_grad
@@ -100,32 +135,36 @@ def grad_descent(W, b, x, y, x_val, y_val, x_test, y_test, alpha, epochs, reg, e
     train_loss = np.zeros(epochs)
     val_loss = np.zeros(epochs)
     test_loss = np.zeros(epochs)
+    accuracy = np.zeros(epochs)
     while((np.linalg.norm(np.append(W, b) - np.append(new_W, new_b)) > error_tol) and iter_ind < epochs):
         W = new_W
         b = new_b
-        w_grad, b_grad = gradMSE(W, b, x, y, reg)
+        w_grad, b_grad = grad(W, b, x, y, reg, lossType)
         new_W = W - alpha * w_grad
         new_b = b - alpha * b_grad
 
         # Calculate losses
-        train_loss[iter_ind] = MSE(new_W, new_b, x, y, reg)
-        val_loss[iter_ind] = MSE(new_W, new_b, x_val, y_val, reg)
-        test_loss[iter_ind] = MSE(new_W, new_b, x_test, y_test, reg)
+        train_loss[iter_ind] = loss(new_W, new_b, x, y, reg, lossType)
+        val_loss[iter_ind] = loss(new_W, new_b, x_val, y_val, reg, lossType)
+        test_loss[iter_ind] = loss(new_W, new_b, x_test, y_test, reg, lossType)
+        corr, fal = linear_model_eval(new_W, new_b, x_test, y_test)
+        accuracy[iter_ind] = corr / (corr + fal)
         iter_ind += 1
-        print("Epoch " + str(iter_ind) + " | MSE: " + str(MSE(new_W, new_b, x, y, reg)))
+        print("Epoch " + str(iter_ind) + " | MSE: " + str(loss(new_W, new_b, x, y, reg, lossType)))
 
     train_loss = train_loss[:iter_ind]
     val_loss = val_loss[:iter_ind]
     test_loss = test_loss[:iter_ind]
+    accuracy = accuracy[:iter_ind]
 
-    return new_W, new_b, iter_ind, train_loss, val_loss, test_loss
+    return new_W, new_b, iter_ind, train_loss, val_loss, test_loss, accuracy
 
 def normal_equation(x, y):
     W = np.linalg.inv(x.T.dot(x)).dot(x.T).dot(y.T[0])
     b = -1 * (x.dot(W) - y.T).sum() / N
     return W, b
 
-def test_data(W, b, x, y):
+def log_model_eval(W, b, x, y):
     '''
 
     :param W: weight matrix
@@ -137,29 +176,76 @@ def test_data(W, b, x, y):
     '''
 
     N = len(x)
+    b_vec = np.ones(N) * b
+
+    y_hat = sigmoid(x.dot(W) + b_vec)
+    error = np.round(np.abs(y_hat - y.T[0]))
+    fal = error.sum()
+    corr = N - fal
+
+    return corr, fal
+
+def linear_model_eval(W, b, x, y):
+    '''
+
+    :param W: weight matrix
+    :param b: bias matrix
+    :param x: test data
+    :param y: labels
+    :return:
+
+    '''
+
+    N = len(x)
+    b_vec = np.zeros(N) * b
     corr = 0
     fal = 0
+
+    y_hat = x.dot(W) + b_vec
+    error = y_hat - y.T[0]
+
     for n in range(N):
-        y_hat = np.dot(W, x[n])
-        if(y_hat >= 0.5):
-            y_hat = 1
+        if(y_hat[n] >= 0.5):
+            y_hat[n] = 1
         else:
-            y_hat = 0
-        if(y_hat == y[n]):
+            y_hat[n] = 0
+        if(y_hat[n] == y[n]):
             corr += 1
         else:
             fal += 1
     return corr, fal
+
 
 def plot_loss(epochs_run, train, val, test):
     ep = np.arange(0, epochs_run)
     plt.plot(ep, train_loss, ep, val_loss, ep, test_loss)
     plt.legend(["training loss", "validation loss", "test_loss"])
     plt.savefig("loss_plot.png")
+    plt.clf()
+
+
+def plot_accuracy(acc):
+    ep = np.arange(0, epochs_run)
+    plt.plot(ep, acc)
+    plt.legend(["test set accuracy"])
+    plt.savefig("accuracy.png")
+    plt.clf()
+
+def buildGraph(beta1=None, beta2=None, epsilon=None, lossType=None, learning_rate=None):
+    '''
+
+    :param beta1:
+    :param beta2:
+    :param epsilon:
+    :param lossType:
+    :param learning_rate:
+    :return:
+    '''
+    pass
 
 if __name__ == '__main__':
 
-    print("Linear Regression Example")
+    print("Regression Example")
     X_train, X_valid, X_test, y_train, y_valid, y_test = loadData()
     X0 = X_train[0]
     d = len(X0) * len(X0[0])
@@ -184,7 +270,7 @@ if __name__ == '__main__':
         start = time.time()
         Wn, bn = normal_equation(x_train, y_train)
         runtime = time.time() - start
-        corr, fal = test_data(Wn, bn, x_test, y_test)
+        corr, fal = linear_model_eval(Wn, bn, x_test, y_test)
         accuracy = corr / (corr + fal)
         fin_tr_loss = MSE(Wn, bn, x_train, y_train, 0)
         with open("normal.txt", "w+") as f:
@@ -195,15 +281,17 @@ if __name__ == '__main__':
 
 
     epochs = 5000
-    reg = 0.5
+    reg = 0
     alpha = 0.005
 
     print("Initialization finished, start gradient descent")
     start = time.time()
-    W, b, epochs_run, train_loss, val_loss, test_loss = grad_descent(W0, b0, x_train, y_train, x_valid, y_valid, x_test, y_test, alpha, epochs, reg)
+    W, b, epochs_run, train_loss, val_loss, test_loss, iterative_accuracy = \
+        grad_descent(W0, b0, x_train, y_train, x_valid, y_valid, x_test, y_test, alpha, epochs, reg, lossType="linear")
     runtime = time.time() - start
     plot_loss(epochs_run, train_loss, val_loss, test_loss)
-    corr, fal = test_data(W, b, x_test, y_test)
+    plot_accuracy(iterative_accuracy)
+    corr, fal = linear_model_eval(W, b, x_test, y_test)
     accuracy = corr / (corr + fal)
     with open("run1.txt", "w+") as f:
         f.write("learning rate = 0.05\n")
