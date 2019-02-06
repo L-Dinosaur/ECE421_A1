@@ -1,0 +1,4 @@
+Normal Equation
+Runtime: 0.09370207786560059 seconds
+Final Training Loss: 0.011502 
+Accuracy: 0.924138
