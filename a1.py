@@ -66,12 +66,12 @@ def sigmoid(z):
 def crossEntropyLoss(W, b, x, y, reg):
     '''
 
-    :param W:
-    :param b:
-    :param x:
-    :param y:
-    :param reg:
-    :return:
+    :param W: weight matrix
+    :param b: bias
+    :param x: feature vector
+    :param y: labels
+    :param reg: regularization constant
+    :return: cross entropy loss of W and b with respect to x and y
     '''
     N = len(x)
     b_vec = np.ones(N) * b
@@ -96,12 +96,12 @@ def get_loss(W, b, x, y, reg, lossType):
 def gradCE(W, b, x, y, reg):
     '''
 
-    :param W:
-    :param b:
-    :param x:
-    :param y:
-    :param reg:
-    :return:
+    :param W: weight matrix
+    :param b: bias
+    :param x: feature vector
+    :param y: labels
+    :param reg: regularization constant
+    :return: gradient of CE loss against {W, b}
     '''
     N = len(x)
     b_vec = np.ones(N) * b
@@ -316,6 +316,14 @@ def plot_accuracy(epochs_run, train, val, test):
     plt.clf()
 
 
+def plot_accuracy(epoch, train):
+    ep = np.arange(0, epoch)
+    plt.plot(ep, train)
+    plt.legend(["training", "validation", "test"])
+    plt.savefig("accuracy.png")
+    plt.clf()
+
+
 if __name__ == '__main__':
 
     print("Regression Example")
@@ -327,7 +335,7 @@ if __name__ == '__main__':
     Nt = len(X_test)
     W0 = np.ones(d) / 1000
     b0 = 1
-    runtype = "stochastic"
+    runtype = "batch"
     # Flatten the input images into vectors
     x_train = np.zeros((N, d))
     x_valid = np.zeros((Nv, d))
@@ -364,7 +372,7 @@ if __name__ == '__main__':
             grad_descent(W0, b0, x_train, y_train, x_valid, y_valid, x_test, y_test, alpha, epochs, reg, lossType="MSE")
         runtime = time.time() - start
         plot_loss(epochs_run, train_loss, val_loss, test_loss)
-        plot_accuracy(iterative_accuracy)
+        plot_accuracy(epochs_run, iterative_accuracy)
         corr, fal = linear_model_eval(W, b, x_test, y_test)
         accuracy = corr / (corr + fal)
         with open("run1.txt", "w+") as f:
