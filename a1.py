@@ -81,16 +81,16 @@ def crossEntropyLoss(W, b, x, y, reg):
     return L
 
 def grad(W, b, x, y, reg, lossType):
-    if(lossType == "linear"):
+    if(lossType == "MSE"):
         return gradMSE(W, b, x, y, reg)
-    elif(lossType == "log"):
+    elif(lossType == "CE"):
         return gradCE(W, b, x, y, reg)
 
 
-def loss(W, b, x, y, reg, lossType):
-    if(lossType == "linear"):
+def get_loss(W, b, x, y, reg, lossType):
+    if(lossType == "MSE"):
         return MSE(W, b, x, y, reg)
-    elif(lossType == "log"):
+    elif(lossType == "CE"):
         return crossEntropyLoss(W, b, x, y, reg)
 
 def gradCE(W, b, x, y, reg):
@@ -144,13 +144,13 @@ def grad_descent(W, b, x, y, x_val, y_val, x_test, y_test, alpha, epochs, reg, e
         new_b = b - alpha * b_grad
 
         # Calculate losses
-        train_loss[iter_ind] = loss(new_W, new_b, x, y, reg, lossType)
-        val_loss[iter_ind] = loss(new_W, new_b, x_val, y_val, reg, lossType)
-        test_loss[iter_ind] = loss(new_W, new_b, x_test, y_test, reg, lossType)
+        train_loss[iter_ind] = get_loss(new_W, new_b, x, y, reg, lossType)
+        val_loss[iter_ind] = get_loss(new_W, new_b, x_val, y_val, reg, lossType)
+        test_loss[iter_ind] = get_loss(new_W, new_b, x_test, y_test, reg, lossType)
         corr, fal = linear_model_eval(new_W, new_b, x_test, y_test)
         accuracy[iter_ind] = corr / (corr + fal)
         iter_ind += 1
-        print("Epoch " + str(iter_ind) + " | MSE: " + str(loss(new_W, new_b, x, y, reg, lossType)))
+        print("Epoch " + str(iter_ind) + " | MSE: " + str(get_loss(new_W, new_b, x, y, reg, lossType)))
 
     train_loss = train_loss[:iter_ind]
     val_loss = val_loss[:iter_ind]
@@ -158,6 +158,82 @@ def grad_descent(W, b, x, y, x_val, y_val, x_test, y_test, alpha, epochs, reg, e
     accuracy = accuracy[:iter_ind]
 
     return new_W, new_b, iter_ind, train_loss, val_loss, test_loss, accuracy
+
+
+def stochastic_grad_desc(x_train, y_train, x_val, y_val, x_test, y_test, batch_size, epochs, reg_c, lossType_):
+    N = len(x_train)
+    # , beta1_ = 0.95, beta2_ = 0.99, epsilon_ = 1e-9
+    W, b, x, pred, y, loss, optimizer, reg = buildGraph(batch_size, learning_rate=0.001, reg_const=reg_c, lossType=lossType_)
+    init = tf.global_variables_initializer()
+    indices = np.arange(0, N)
+    loss_train = np.zeros(epochs)
+    acc_train = np.zeros(epochs)
+    loss_val = np.zeros(epochs)
+    acc_val = np.zeros(epochs)
+    loss_test = np.zeros(epochs)
+    acc_test = np.zeros(epochs)
+    with tf.Session() as sess:
+        sess.run(init)
+        for i_epoch in range(epochs):
+            avg_loss = 0
+            batch_num = int(N / batch_size)
+            np.random.shuffle(indices)
+            for i_batch in range(batch_num):
+                batch_x = x_train[indices[i_batch * batch_size:(i_batch + 1) * batch_size]]
+                batch_y = y_train[indices[i_batch * batch_size:(i_batch + 1) * batch_size]]
+                batch_y = batch_y.reshape(batch_size, 1).astype("float")
+                sess.run(optimizer, feed_dict={x: batch_x, y: batch_y})
+                w1, b1, x1, pred1, l1 = sess.run([W, b, x, pred, loss], feed_dict={x: batch_x, y: batch_y})
+                avg_loss += l1 / batch_num
+            print("Epoch: %d | cost: %f" % (i_epoch + 1, avg_loss))
+
+            W_mse, b_mse = sess.run([W, b], feed_dict={x: batch_x, y: batch_y})
+            W_mse = W_mse.T[0]
+            loss_train[i_epoch] = get_loss(W_mse, b_mse, x_train, y_train, reg_c, lossType_)
+            acc_train[i_epoch] = acc(W_mse, b_mse, x_train, y_train, lossType_)
+            loss_val[i_epoch] = get_loss(W_mse, b_mse, x_val, y_val, reg_c, lossType_)
+            acc_val[i_epoch] = acc(W_mse, b_mse, x_val, y_val, lossType_)
+            loss_test[i_epoch] = get_loss(W_mse, b_mse, x_test, y_test, reg_c, lossType_)
+            acc_test[i_epoch] = acc(W_mse, b_mse, x_test, y_test, lossType_)
+
+    return loss_train, acc_train, loss_val, acc_val, loss_test, acc_test
+
+
+def buildGraph(batch_size, beta1_=None, beta2_=None, epsilon_=None, lossType=None, learning_rate=None, reg_const=0.0):
+    '''
+
+    :param beta1:
+    :param beta2:
+    :param epsilon:
+    :param lossType:
+    :param learning_rate:
+    :return:
+    '''
+
+    # Initialize weight and bias tensors
+    tf.set_random_seed(421)
+    # weight and bias tensors
+    W = tf.Variable(tf.truncated_normal(shape=(784, 1), stddev=0.5), dtype=tf.float32, name="W")
+    b = tf.Variable(0.0, dtype=tf.float32, name="b")
+    # Note b is a vector of length N
+    # variable tensors
+    x = tf.placeholder(shape=(batch_size, 784), dtype=tf.float32, name="x")
+    y = tf.placeholder(shape=(batch_size, 1), dtype=tf.float32, name="y")
+    reg = tf.constant(reg_const, tf.float32)
+    # loss tensor
+    if lossType == "MSE":
+        pred = tf.matmul(x, W) + b
+        err = pred - y
+        loss = tf.add(0.5 * tf.reduce_mean(tf.square(err)), 0.5 * reg * tf.reduce_sum(tf.square(W)), name="loss")
+    elif lossType == "CE":
+        pred = tf.sigmoid(tf.matmul(x, W) + b)
+        loss = (-1 * tf.matmul(tf.transpose(y), tf.log(pred + 1e-7)) + tf.matmul(tf.transpose(tf.subtract(y, 1.0)), tf.log(tf.subtract(1.0, pred) + 1e-7))) / batch_size + 0.5 * reg * tf.reduce_sum(tf.square(W))
+    # optimizer
+    # , beta1=beta1_, beta2=beta2_, epsilon=epsilon_
+    optimizer = tf.train.AdamOptimizer(learning_rate=learning_rate, epsilon=1e-4).minimize(loss)
+
+    return W, b, x, pred, y, loss, optimizer, reg
+
 
 def normal_equation(x, y):
     W = np.linalg.inv(x.T.dot(x)).dot(x.T).dot(y.T[0])
@@ -184,6 +260,14 @@ def log_model_eval(W, b, x, y):
     corr = N - fal
 
     return corr, fal
+
+
+def acc(W, b, x, y, lossType):
+    if lossType == "MSE":
+        corr, fal = linear_model_eval(W, b, x, y)
+    elif lossType == "CE":
+        corr, fal = log_model_eval(W, b, x, y)
+    return corr / (corr + fal)
 
 def linear_model_eval(W, b, x, y):
     '''
@@ -218,30 +302,19 @@ def linear_model_eval(W, b, x, y):
 
 def plot_loss(epochs_run, train, val, test):
     ep = np.arange(0, epochs_run)
-    plt.plot(ep, train_loss, ep, val_loss, ep, test_loss)
+    plt.plot(ep, train, ep, val, ep, test)
     plt.legend(["training loss", "validation loss", "test_loss"])
     plt.savefig("loss_plot.png")
     plt.clf()
 
 
-def plot_accuracy(acc):
+def plot_accuracy(epochs_run, train, val, test):
     ep = np.arange(0, epochs_run)
-    plt.plot(ep, acc)
-    plt.legend(["test set accuracy"])
+    plt.plot(ep, train, ep, val, ep, test)
+    plt.legend(["training", "validation", "test"])
     plt.savefig("accuracy.png")
     plt.clf()
 
-def buildGraph(beta1=None, beta2=None, epsilon=None, lossType=None, learning_rate=None):
-    '''
-
-    :param beta1:
-    :param beta2:
-    :param epsilon:
-    :param lossType:
-    :param learning_rate:
-    :return:
-    '''
-    pass
 
 if __name__ == '__main__':
 
@@ -254,7 +327,7 @@ if __name__ == '__main__':
     Nt = len(X_test)
     W0 = np.ones(d) / 1000
     b0 = 1
-    normal = False
+    runtype = "stochastic"
     # Flatten the input images into vectors
     x_train = np.zeros((N, d))
     x_valid = np.zeros((Nv, d))
@@ -266,7 +339,8 @@ if __name__ == '__main__':
     for n, xn in enumerate(X_test):
         x_test[n] = np.reshape(xn, d)
 
-    if(normal):
+
+    if(runtype == "normal"):
         start = time.time()
         Wn, bn = normal_equation(x_train, y_train)
         runtime = time.time() - start
@@ -279,30 +353,50 @@ if __name__ == '__main__':
             f.write("Final Training Loss: %f \n" % fin_tr_loss)
             f.write("Accuracy: %f" % accuracy)
 
+    if(runtype == "batch"):
+        epochs = 5000
+        reg = 0
+        alpha = 0.005
 
-    epochs = 5000
-    reg = 0
-    alpha = 0.005
+        print("Initialization finished, start gradient descent")
+        start = time.time()
+        W, b, epochs_run, train_loss, val_loss, test_loss, iterative_accuracy = \
+            grad_descent(W0, b0, x_train, y_train, x_valid, y_valid, x_test, y_test, alpha, epochs, reg, lossType="MSE")
+        runtime = time.time() - start
+        plot_loss(epochs_run, train_loss, val_loss, test_loss)
+        plot_accuracy(iterative_accuracy)
+        corr, fal = linear_model_eval(W, b, x_test, y_test)
+        accuracy = corr / (corr + fal)
+        with open("run1.txt", "w+") as f:
+            f.write("learning rate = 0.05\n")
+            f.write("Runtime: %s seconds\n" % runtime)
+            f.write("Epochs run: %d \n" % epochs_run)
+            f.write("Accuracy: %f\n" % accuracy)
+            f.write("Final Training Loss: %f \n" % train_loss[-1])
+            f.write("Final Validation Loss: %f \n" % val_loss[-1])
+            f.write("Final Testing Loss: %f \n" % test_loss[-1])
 
-    print("Initialization finished, start gradient descent")
-    start = time.time()
-    W, b, epochs_run, train_loss, val_loss, test_loss, iterative_accuracy = \
-        grad_descent(W0, b0, x_train, y_train, x_valid, y_valid, x_test, y_test, alpha, epochs, reg, lossType="linear")
-    runtime = time.time() - start
-    plot_loss(epochs_run, train_loss, val_loss, test_loss)
-    plot_accuracy(iterative_accuracy)
-    corr, fal = linear_model_eval(W, b, x_test, y_test)
-    accuracy = corr / (corr + fal)
-    with open("run1.txt", "w+") as f:
-        f.write("learning rate = 0.05\n")
-        f.write("Runtime: %s seconds\n" % runtime)
-        f.write("Epochs run: %d \n" % epochs_run)
-        f.write("Accuracy: %f\n" % accuracy)
-        f.write("Final Training Loss: %f \n" % train_loss[-1])
-        f.write("Final Validation Loss: %f \n" % val_loss[-1])
-        f.write("Final Testing Loss: %f \n" % test_loss[-1])
+        print("--- %s seconds ---" % runtime)
+        print("--- correct classification: " + str(corr))
+        print("--- false classification:   " + str(fal))
+        print("--- accuracy:               " + str(corr / (corr + fal)))
 
-    print("--- %s seconds ---" % runtime)
-    print("--- correct classification: " + str(corr))
-    print("--- false classification:   " + str(fal))
-    print("--- accuracy:               " + str(corr / (corr + fal)))
+    if(runtype == "stochastic"):
+        epochs = 700
+        batch_size = 500
+        reg = 0.0
+        start = time.time()
+        mse_train, acc_train, mse_val, acc_val, mse_test, acc_test = \
+            stochastic_grad_desc(x_train, y_train, x_valid, y_valid, x_test, y_test, batch_size, epochs, reg, "MSE")
+        t = time.time() - start
+
+        plot_loss(epochs, mse_train, mse_val, mse_test)
+        plot_accuracy(epochs, acc_train, acc_val, acc_test)
+        with open("sgd.txt", "w+") as f:
+            f.write("SGD Batch Size\n")
+            f.write("Final Classification Accuracy: \n")
+            f.write("Training %f | Validation %f | Testing %f" % (acc_train[-1], acc_val[-1], acc_test[-1]))
+
+        print("ran in %s seconds" % t)
+
+

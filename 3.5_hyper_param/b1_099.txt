@@ -1,0 +1,3 @@
+SGD Batch Size
+Final Classification Accuracy: 
+Training 0.990286 | Validation 0.980000 | Testing 0.972414
